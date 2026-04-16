@@ -1,0 +1,424 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  Calculator, 
+  Plus, 
+  Trash2, 
+  Clock, 
+  Building2, 
+  Percent, 
+  FileText, 
+  Printer,
+  Info,
+  CheckCircle,
+  AlertCircle,
+  Coins
+} from 'lucide-react';
+
+const App = () => {
+  // Configurações do Documento Principal
+  const [docInfo, setDocInfo] = useState({
+    titulo: '',
+    valorTotal: 0, // Mantemos como número internamente
+    metodo: 'quantidade' // Opções: 'quantidade', 'tempo', 'percentual'
+  });
+
+  // Lista de itens/destinos do rateio
+  const [destinos, setDestinos] = useState([
+    { id: 1, nome: 'Item de Rateio 1', peso: 0 },
+    { id: 2, nome: 'Item de Rateio 2', peso: 0 }
+  ]);
+
+  // Função para formatar número para Moeda BRL (Display)
+  const formatarMoeda = (valor) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2
+    }).format(valor || 0);
+  };
+
+  // Função para formatar a entrada de texto para Moeda em tempo real (Máscara)
+  const aplicarMascaraMoeda = (valorTexto) => {
+    // Remove tudo que não é dígito
+    let apenasNumeros = valorTexto.replace(/\D/g, "");
+    
+    // Converte para número considerando os últimos 2 dígitos como centavos
+    let valorNumerico = parseFloat(apenasNumeros) / 100;
+    
+    if (isNaN(valorNumerico)) return "";
+    
+    // Retorna formatado para o input
+    return new Intl.NumberFormat('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(valorNumerico);
+  };
+
+  // Converte a string formatada de volta para número puro
+  const desformatarMoeda = (valorFormatado) => {
+    if (!valorFormatado) return 0;
+    const apenasNumeros = valorFormatado.replace(/\D/g, "");
+    return parseFloat(apenasNumeros) / 100;
+  };
+
+  // Cálculo derivado dos valores (Memória de Cálculo)
+  const memoriaCalculo = useMemo(() => {
+    const valorBase = parseFloat(docInfo.valorTotal) || 0;
+    const somaPesos = destinos.reduce((acc, d) => acc + (parseFloat(d.peso) || 0), 0);
+    
+    const itensProcessados = destinos.map(dest => {
+      let vCalc = 0;
+      let pCalc = 0;
+      const pesoAtual = parseFloat(dest.peso) || 0;
+
+      if (docInfo.metodo === 'percentual') {
+        pCalc = pesoAtual;
+        vCalc = (valorBase * pesoAtual) / 100;
+      } else {
+        if (somaPesos > 0) {
+          pCalc = (pesoAtual / somaPesos) * 100;
+          vCalc = (valorBase * pesoAtual) / somaPesos;
+        }
+      }
+      
+      return { 
+        ...dest, 
+        valorCalculado: vCalc, 
+        porcentagem: pCalc 
+      };
+    });
+
+    const totalDistribuido = itensProcessados.reduce((acc, i) => acc + i.valorCalculado, 0);
+    const diff = Math.abs(totalDistribuido - valorBase);
+    const equilibrado = diff < 0.01 && valorBase > 0;
+
+    return { 
+      itens: itensProcessados, 
+      total: totalDistribuido, 
+      equilibrado, 
+      diferenca: valorBase - totalDistribuido 
+    };
+  }, [docInfo.valorTotal, docInfo.metodo, destinos]);
+
+  const adicionarDestino = () => {
+    setDestinos([...destinos, { 
+      id: Date.now(), 
+      nome: `Novo Item ${destinos.length + 1}`, 
+      peso: 0 
+    }]);
+  };
+
+  const removerDestino = (id) => {
+    if (destinos.length > 1) {
+      setDestinos(destinos.filter(d => d.id !== id));
+    }
+  };
+
+  const atualizarDestino = (id, campo, valor) => {
+    setDestinos(destinos.map(d => d.id === id ? { ...d, [campo]: valor } : d));
+  };
+
+  // Handler específico para o input de moeda
+  const handleCurrencyInputChange = (e, callback) => {
+    const valorComMascara = aplicarMascaraMoeda(e.target.value);
+    const valorNumerico = desformatarMoeda(valorComMascara);
+    callback(valorNumerico);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-900">
+      <div className="max-w-5xl mx-auto space-y-6">
+        
+        {/* Cabeçalho */}
+        <header className="bg-white border-b-4 border-indigo-600 p-6 rounded-xl shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-4">
+            <div className="bg-indigo-600 p-3 rounded-lg text-white">
+              <Calculator size={28} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-800">Calculadora Universal de Rateio</h1>
+              <p className="text-slate-500 text-sm font-medium italic">Agnóstica para Terceiro Setor e Gestão Pública</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-full border border-slate-200">
+            {memoriaCalculo.equilibrado ? (
+              <><CheckCircle className="text-emerald-500" size={18} /> <span className="text-xs font-bold text-emerald-700 uppercase tracking-tighter">Valor Conciliado</span></>
+            ) : (
+              <><AlertCircle className="text-amber-500" size={18} /> <span className="text-xs font-bold text-amber-600 uppercase tracking-tighter">Distribuição Pendente</span></>
+            )}
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* Seção de Entrada de Dados */}
+          <aside className="lg:col-span-4 space-y-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+              <h2 className="text-xs font-black text-slate-400 uppercase mb-4 flex items-center gap-2 tracking-widest">
+                <FileText size={14} /> Dados do Comprovante
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Finalidade da Despesa</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Aluguel, FGTS, Energia..."
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    value={docInfo.titulo}
+                    onChange={(e) => setDocInfo({...docInfo, titulo: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Total Bruto (R$)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-3 text-indigo-600 font-bold text-sm">R$</span>
+                    <input 
+                      type="text" 
+                      className="w-full p-3 pl-10 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono font-bold text-lg text-indigo-700"
+                      placeholder="0,00"
+                      value={docInfo.valorTotal > 0 ? aplicarMascaraMoeda(docInfo.valorTotal.toFixed(2).replace(".", "")) : ""}
+                      onChange={(e) => handleCurrencyInputChange(e, (val) => setDocInfo({...docInfo, valorTotal: val}))}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+              <h2 className="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest">
+                Metodologia de Divisão
+              </h2>
+              <div className="space-y-2">
+                {[
+                  { id: 'quantidade', label: 'Unidades / Empresas', icon: Building2, desc: 'Divisão por número de locais ou atendimentos.' },
+                  { id: 'tempo', label: 'Tempo / Horários', icon: Clock, desc: 'Proporcional a horas de uso (Comercial vs Extra).' },
+                  { id: 'percentual', label: 'Quota % Direta', icon: Percent, desc: 'Entrada manual de porcentagens fixas.' }
+                ].map((item) => (
+                  <button 
+                    key={item.id}
+                    onClick={() => setDocInfo({...docInfo, metodo: item.id})}
+                    className={`w-full flex items-start gap-3 p-3 rounded-xl border-2 transition-all text-left ${docInfo.metodo === item.id ? 'border-indigo-600 bg-indigo-50 shadow-sm' : 'border-slate-50 hover:border-slate-200'}`}
+                  >
+                    <item.icon size={20} className={docInfo.metodo === item.id ? 'text-indigo-600' : 'text-slate-400'} />
+                    <div>
+                      <div className={`text-sm font-bold ${docInfo.metodo === item.id ? 'text-indigo-900' : 'text-slate-700'}`}>{item.label}</div>
+                      <div className="text-[10px] leading-tight text-slate-500 mt-0.5">{item.desc}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </aside>
+
+          {/* Área Principal de Rateio */}
+          <main className="lg:col-span-8 space-y-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 min-h-[400px]">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  Distribuição de Custos
+                </h2>
+                <button 
+                  onClick={adicionarDestino}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all active:scale-95 shadow-md"
+                >
+                  <Plus size={16} /> ADICIONAR ITEM
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {memoriaCalculo.itens.map((dest) => (
+                  <div key={dest.id} className="relative bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-wrap md:flex-nowrap items-center gap-4 group transition-all hover:bg-white hover:border-indigo-100 hover:shadow-sm">
+                    
+                    <div className="flex-1 min-w-[200px]">
+                      <label className="block text-[10px] uppercase font-black text-slate-400 mb-1 tracking-tighter italic">Identificação da Destinação</label>
+                      <input 
+                        type="text" 
+                        value={dest.nome}
+                        onChange={(e) => atualizarDestino(dest.id, 'nome', e.target.value)}
+                        className="w-full bg-transparent border-b border-slate-200 focus:border-indigo-500 outline-none p-1 font-bold text-slate-700"
+                        placeholder="Ex: Unidade Comercial ou Atividade Extra"
+                      />
+                    </div>
+
+                    <div className="w-full md:w-36">
+                      <label className="block text-[10px] uppercase font-black text-slate-400 mb-1 tracking-tighter italic">
+                        {docInfo.metodo === 'quantidade' ? 'Valor / Peso' : docInfo.metodo === 'tempo' ? 'Horas / Min' : '% Quota'}
+                      </label>
+                      <div className="relative">
+                        {docInfo.metodo === 'quantidade' && (
+                          <span className="absolute left-2 top-2 text-indigo-400 text-xs font-bold">R$</span>
+                        )}
+                        <input 
+                          type="text"
+                          className={`w-full p-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono text-right font-bold text-slate-800 ${docInfo.metodo === 'quantidade' ? 'pl-7' : ''}`}
+                          value={docInfo.metodo === 'quantidade' ? (dest.peso > 0 ? aplicarMascaraMoeda(dest.peso.toFixed(2).replace(".", "")) : "") : dest.peso || ""}
+                          onChange={(e) => {
+                            if (docInfo.metodo === 'quantidade') {
+                              handleCurrencyInputChange(e, (val) => atualizarDestino(dest.id, 'peso', val));
+                            } else {
+                              atualizarDestino(dest.id, 'peso', e.target.value);
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="w-full md:w-44 text-right">
+                      <label className="block text-[10px] uppercase font-black text-slate-400 mb-1 tracking-tighter italic underline decoration-indigo-200">Parcela Rateada</label>
+                      <div className="font-mono font-black text-indigo-900 text-lg leading-none mb-1">
+                        {formatarMoeda(dest.valorCalculado)}
+                      </div>
+                      <div className="text-[10px] font-bold text-emerald-600 bg-emerald-50 inline-block px-1.5 rounded border border-emerald-100">
+                        {dest.porcentagem.toFixed(2)}% do Total
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={() => removerDestino(dest.id)}
+                      className="p-2 text-slate-300 hover:text-red-500 transition-colors bg-white rounded-full border border-transparent hover:border-red-100 shadow-sm md:shadow-none"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Sumário de Conferência */}
+              <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-8">
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Rateado</div>
+                    <div className={`text-xl font-mono font-black ${memoriaCalculo.equilibrado ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {formatarMoeda(memoriaCalculo.total)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Saldo Restante</div>
+                    <div className="text-sm font-mono font-bold text-slate-400">
+                      {formatarMoeda(memoriaCalculo.diferenca)}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="text-right w-full md:w-auto">
+                  <div className="text-[10px] font-black text-slate-400 uppercase mb-1 tracking-widest">Status da Conciliação</div>
+                  <div className="h-2 w-full md:w-48 bg-slate-100 rounded-full overflow-hidden border">
+                    <div 
+                      className={`h-full transition-all duration-700 ${memoriaCalculo.equilibrado ? 'bg-emerald-500' : 'bg-indigo-600 animate-pulse'}`}
+                      style={{ width: `${Math.min(100, (memoriaCalculo.total / (docInfo.valorTotal || 1)) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+
+        {/* Relatório Final */}
+        {memoriaCalculo.equilibrado && (
+          <section className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-500">
+            <div className="p-4 bg-slate-800 flex justify-between items-center border-b border-slate-700">
+              <div className="flex items-center gap-2 text-white font-black text-xs tracking-widest uppercase px-2">
+                <Coins size={16} className="text-indigo-400" /> Memorial Técnico de Rateio Administrativo
+              </div>
+              <button 
+                onClick={() => window.print()}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-full text-xs font-bold transition-all shadow-lg active:scale-95"
+              >
+                IMPRIMIR RELATÓRIO
+              </button>
+            </div>
+            
+            <div className="p-8 font-mono text-sm text-slate-300 leading-relaxed printable-area">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10 border-b border-slate-700 pb-8 text-xs md:text-sm">
+                <div className="space-y-3">
+                  <h3 className="text-indigo-400 font-black uppercase tracking-widest border-l-4 border-indigo-600 pl-3">Identificação do Objeto</h3>
+                  <div className="space-y-1">
+                    <p><span className="text-slate-500">Descrição:</span> <span className="text-white font-bold uppercase">{docInfo.titulo || 'NÃO ESPECIFICADO'}</span></p>
+                    <p><span className="text-slate-500">Valor Bruto:</span> <span className="text-white font-bold">{formatarMoeda(docInfo.valorTotal)}</span></p>
+                    <p><span className="text-slate-500">Data de Geração:</span> <span className="text-white">{new Date().toLocaleDateString('pt-BR')}</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h3 className="text-indigo-400 font-black uppercase tracking-widest border-l-4 border-indigo-600 pl-3">Metodologia Aplicada</h3>
+                  <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 italic text-[11px] leading-snug">
+                    {docInfo.metodo === 'quantidade' && "Aplicação de rateio quantitativo/financeiro sobre a totalidade das unidades gerenciadas ou volume de despesas específicas."}
+                    {docInfo.metodo === 'tempo' && "Segregação baseada em carga horária de uso (tempo), distinguindo execução pública de atividades acessórias."}
+                    {docInfo.metodo === 'percentual' && "Divisão manual por quota percentual aprovada conforme Plano de Trabalho ou norma interna de rateio."}
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-indigo-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-700">
+                      <th className="py-3 pr-4">Destinação / Centro de Custo</th>
+                      <th className="text-right px-4">Peso / Fator</th>
+                      <th className="text-right px-4">Cota (%)</th>
+                      <th className="text-right pl-4">Valor Alocado (R$)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {memoriaCalculo.itens.map(d => (
+                      <tr key={d.id} className="hover:bg-slate-800/30 transition-colors">
+                        <td className="py-4 font-bold text-white uppercase pr-4">{d.nome}</td>
+                        <td className="text-right text-slate-400 px-4 font-mono">
+                          {docInfo.metodo === 'quantidade' ? formatarMoeda(d.peso).replace("R$", "") : d.peso}
+                        </td>
+                        <td className="text-right text-slate-400 px-4 font-mono">{d.porcentagem.toFixed(4)}%</td>
+                        <td className="text-right text-indigo-400 font-black pl-4">{formatarMoeda(d.valorCalculado)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-indigo-500 font-black text-white bg-indigo-900/10">
+                      <td className="py-6 uppercase italic">Totalização Consolidada</td>
+                      <td className="text-right px-4 text-slate-500">
+                        {docInfo.metodo === 'percentual' ? '-' : `∑ ${destinos.reduce((acc, d) => acc + parseFloat(d.peso), 0)}`}
+                      </td>
+                      <td className="text-right px-4">100.00%</td>
+                      <td className="text-right text-lg text-emerald-400 pl-4">{formatarMoeda(memoriaCalculo.total)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              <div className="mt-12 flex gap-4 items-start bg-blue-900/20 p-6 rounded-2xl border border-blue-800/30 shadow-inner">
+                <Info size={24} className="text-blue-400 mt-1 flex-shrink-0" />
+                <div className="text-[10px] md:text-[11px] text-blue-300 uppercase leading-relaxed font-bold">
+                  Nota de Rastreabilidade Técnica: Este memorial de rateio atende aos requisitos de auditoria do Terceiro Setor (AUDESP V / TCE-SP). 
+                  Demonstra de forma analítica o nexo causal entre a despesa bruta e a parcela alocada aos recursos públicos, 
+                  assegurando a transparência e a correta segregação de custos indiretos.
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+      </div>
+
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .printable-area, .printable-area * { visibility: visible; }
+          .printable-area { 
+            position: absolute; 
+            left: 0; 
+            top: 0; 
+            width: 100%; 
+            color: black !important; 
+            background: white !important;
+            padding: 20px;
+          }
+          .printable-area * { color: black !important; border-color: #333 !important; }
+          .text-indigo-400, .text-emerald-400, .text-blue-300, .text-slate-300, .text-slate-500 { color: black !important; }
+          .bg-slate-900, .bg-slate-800, .bg-blue-900/20, .bg-slate-800/50 { background: white !important; border: 1px solid #333 !important; }
+          .border-indigo-600, .border-indigo-500, .border-l-4 { border-color: black !important; }
+          button { display: none !important; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default App;
